@@ -1,10 +1,3 @@
-"""
-Robust functions for grabbing and saving screenshots on Windows.
-"""
-
-# TODO: support capture of individual displays (and at the same time with a "single screenshot")
-# Use GetDeviceCaps; see http://msdn.microsoft.com/en-us/library/dd144877%28v=vs.85%29.aspx
-
 import ctypes
 import win32gui
 import win32ui
@@ -54,23 +47,55 @@ def _deleteDCAndBitMap(dc, bitmap):
 	win32gui.DeleteObject(bitmap.GetHandle())
 
 
-def getDCAndBitMap(saveBmpFilename=None):
+def getDCAndBitMap(saveBmpFilename=None, target_monitor=None, bbox=None):
 	"""
 	Returns a (DC, PyCBitmap).  On the returned PyCBitmap, you *must* call
 	win32gui.DeleteObject(aPyCBitmap.GetHandle()).  On the returned DC,
 	you *must* call aDC.DeleteDC()
 	"""
-	hwndDesktop = win32gui.GetDesktopWindow()
 
-	# Get complete virtual screen, including all monitors.
-	left = win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN)
-	top = win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN)
-	width = win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN)
-	height = win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)
-	##print "L", left, "T", top, "dim:", width, "x", height
+	if target_monitor != None:
+		# Get attached devices
+		# Enum returns a list of tuples containing monitorHandle, DCHandle, screenRect 
+		monitors = win32api.EnumDisplayMonitors(None, None)
 
-	# Retrieve the device context (DC) for the entire window.
-	hwndDevice = win32gui.GetWindowDC(hwndDesktop)
+		# Make sure the choice is valid. Instruct usage if not. 
+		if target_monitor > len(monitors)-1:
+			raise Exception('Monitor argument exceeds attached number of devices. There '+
+							'are %d devices currently availble.\n'  % len(monitors) +
+							'Please select appropriate device ( 0=Primary, 1=secondary, etc..)' + 
+							' or leave param blank to capture entire virtual screen.')
+
+		hwnd = monitors[target_monitor][1].handle
+		left,top,right,bottom = monitors[target_monitor][2]
+		width = right - left
+		height = bottom
+	
+	elif bbox:
+		hwnd = win32gui.GetDesktopWindow()
+
+		# Unpack tuple
+		left, top, width, height = bbox
+		# make sure the coordinates aren't too big. 
+		if (left < win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN) or 
+			top < win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN) or 
+			width > win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN) or
+			height > win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)):
+			raise Exception('Invalid bounding box. Range exceeds available screen area.')	
+
+	else:
+		hwnd = win32gui.GetDesktopWindow()
+
+		# Get complete virtual screen, including all monitors.
+		left = win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN)
+		top = win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN)
+		width = win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN)
+		height = win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)
+		##print "L", left, "T", top, "dim:", width, "x", height
+
+		# Retrieve the device context (DC) for the entire window.
+	
+	hwndDevice = win32gui.GetWindowDC(hwnd)
 	##print "device", hwndDevice
 	assert isinstance(hwndDevice, (int, long)), hwndDevice
 
@@ -137,14 +162,13 @@ def getBGR32(dc, bitmap):
 	return pbBits.raw, (width, height)
 
 
-def getScreenAsImage():
+def getScreenAsImage(target_monitor=None, bbox=None):
 	"""
 	Returns a PIL Image object (mode RGB) of the current screen (incl.
 	all monitors).
 	"""
 	import Image
-
-	dc, bitmap = getDCAndBitMap()
+	dc, bitmap = getDCAndBitMap(target_monitor = target_monitor, bbox=bbox)
 	try:
 		bmpInfo = bitmap.GetInfo()
 		# bmpInfo is something like {
@@ -174,20 +198,26 @@ def getScreenAsImage():
 		_deleteDCAndBitMap(dc, bitmap)
 
 
-def saveScreenToBmp(bmpFilename):
+def saveScreenToBmp(bmpFilename, target_monitor=None, bbox=None):
 	"""
 	Save a screenshot (incl. all monitors) to a .bmp file.  Does not require PIL.
 	The .bmp file will have the same bit-depth as the screen; it is not
 	guaranteed to be 32-bit.
 	"""
-	dc, bitmap = getDCAndBitMap(saveBmpFilename=bmpFilename)
+	dc, bitmap = getDCAndBitMap(saveBmpFilename=bmpFilename, target_monitor=target_monitor, bbox=bbox)
 	_deleteDCAndBitMap(dc, bitmap)
 
 
 def _demo():
-	saveScreenToBmp('screencapture.bmp')
-	im = getScreenAsImage()
-	im.save('screencapture.png', format='png')
+	save_names = ['all_monitors', 'primary_monitor', 'secondary_monitor', 'bounding_test_1', 'bounding_test_2']
+	monitor_params = [None, 0, 1, None, None]
+	bbox_params = [None, None, None, (0,0,100,50), (400,300, 200,200)]
+
+
+	for i in range(len(save_names)):
+		saveScreenToBmp( save_names[i] + '.bmp', monitor_params[i], bbox_params[i] )
+		im = getScreenAsImage( monitor_params[i], bbox_params[i] )
+		im.save( save_names[i] + '.png', format='png' )
 
 
 if __name__ == '__main__':
