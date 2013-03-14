@@ -1,3 +1,10 @@
+"""
+Robust functions for grabbing and saving screenshots on Windows.
+"""
+
+# TODO: support capture of individual displays (and at the same time with a "single screenshot")
+# Use GetDeviceCaps; see http://msdn.microsoft.com/en-us/library/dd144877%28v=vs.85%29.aspx
+
 import ctypes
 import win32gui
 import win32ui
@@ -28,13 +35,20 @@ class BITMAPINFO(ctypes.Structure):
 		('bmiColors', ctypes.c_ulong * 3)
 	]
 
-
-
 class GrabFailed(Exception):
 	"""
 	Could not take a screenshot.
 	"""
 
+class MonitorSelectionOutOfBounds(Exception):
+	'''
+	Argument out of bounds
+	'''
+
+class BoundingBoxOutOfRange(Exception):
+	'''
+	Coordinates are too large for the current resolution
+	'''
 
 
 class DIBFailed(Exception):
@@ -46,37 +60,50 @@ def _deleteDCAndBitMap(dc, bitmap):
 	dc.DeleteDC()
 	win32gui.DeleteObject(bitmap.GetHandle())
 
+def getMonitorCoordinates(target_monitor):
+	'''
+	Enumerates the available monitor. Return the 
+	Screen Dimensions of the selected monitor. 
+	'''
+	HMONITOR = 0
+	HDCMONITOR = 1
+	SCREENRECT = 2
 
-def getDCAndBitMap(saveBmpFilename=None, target_monitor=None, bbox=None):
+	try:
+		monitors = win32api.EnumDisplayMonitors(None, None)
+
+		if target_monitor > len(monitors)-1:
+			raise MonitorSelectionOutOfBounds("Monitor argument exceeds attached number of devices.\n"
+				"There are only %d display devices attached.\n" % len(monitors) + 
+				"Please select appropriate device ( 0=Primary, 1=Secondary, etc..)." )
+
+		left,top,right,bottom = monitors[target_monitor][SCREENRECT]
+		width = right - left
+		height = bottom
+
+	finally:
+		# I can't figure out what to do with the handle to the Monitor 
+		# that gets returned from EnumDisplayMonitors (the first object in
+		# the tuple). Trying to close it throws an error.. Does it not need 
+		# cleaned up at all? Most of the winApi is back magic to me... 
+		
+		# These device context handles were the only things that I could Close()
+		monitors[0][HDCMONITOR].Close()
+		monitors[1][HDCMONITOR].Close()
+
+	return (left, top, width, height)
+
+
+def getDCAndBitMap(saveBmpFilename=None, bbox=None):
 	"""
 	Returns a (DC, PyCBitmap).  On the returned PyCBitmap, you *must* call
 	win32gui.DeleteObject(aPyCBitmap.GetHandle()).  On the returned DC,
 	you *must* call aDC.DeleteDC()
 	"""
-
-	if target_monitor != None:
-		# Get attached devices
-		# Enum returns a list of tuples containing monitorHandle, DCHandle, screenRect 
-		monitors = win32api.EnumDisplayMonitors(None, None)
-
-		# Make sure the choice is valid. Instruct usage if not. 
-		if target_monitor > len(monitors)-1:
-			raise Exception('Monitor argument exceeds attached number of devices. There '+
-							'are %d devices currently availble.\n'  % len(monitors) +
-							'Please select appropriate device ( 0=Primary, 1=secondary, etc..)' + 
-							' or leave param blank to capture entire virtual screen.')
-
-		hwnd = monitors[target_monitor][1].handle
-		left,top,right,bottom = monitors[target_monitor][2]
-		width = right - left
-		height = bottom
-	
-	elif bbox:
+	if bbox:
 		hwnd = win32gui.GetDesktopWindow()
 
-		# Unpack tuple
 		left, top, width, height = bbox
-		# make sure the coordinates aren't too big. 
 		if (left < win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN) or 
 			top < win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN) or 
 			width > win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN) or
@@ -162,13 +189,16 @@ def getBGR32(dc, bitmap):
 	return pbBits.raw, (width, height)
 
 
-def getScreenAsImage(target_monitor=None, bbox=None):
+def getScreenAsImage(bbox=None):
 	"""
 	Returns a PIL Image object (mode RGB) of the current screen (incl.
 	all monitors).
+
+	bbox =  boundingBox. Used to snap a subarea of the screen. 
+	A tuple of (x, y, width, height). 
 	"""
 	import Image
-	dc, bitmap = getDCAndBitMap(target_monitor = target_monitor, bbox=bbox)
+	dc, bitmap = getDCAndBitMap(bbox=bbox)
 	try:
 		bmpInfo = bitmap.GetInfo()
 		# bmpInfo is something like {
@@ -198,26 +228,30 @@ def getScreenAsImage(target_monitor=None, bbox=None):
 		_deleteDCAndBitMap(dc, bitmap)
 
 
-def saveScreenToBmp(bmpFilename, target_monitor=None, bbox=None):
+def saveScreenToBmp(bmpFilename, bbox=None):
 	"""
 	Save a screenshot (incl. all monitors) to a .bmp file.  Does not require PIL.
 	The .bmp file will have the same bit-depth as the screen; it is not
 	guaranteed to be 32-bit.
+
+	bbox = boundingBox. Used to snap a subarea of the screen. 
+	A tuple of (x, y, width, height). 
 	"""
-	dc, bitmap = getDCAndBitMap(saveBmpFilename=bmpFilename, target_monitor=target_monitor, bbox=bbox)
+	dc, bitmap = getDCAndBitMap(saveBmpFilename=bmpFilename, bbox=bbox)
 	_deleteDCAndBitMap(dc, bitmap)
 
 
 def _demo():
 	save_names = ['all_monitors', 'primary_monitor', 'secondary_monitor', 'bounding_test_1', 'bounding_test_2']
-	monitor_params = [None, 0, 1, None, None]
-	bbox_params = [None, None, None, (0,0,100,50), (400,300, 200,200)]
-
+	params = [None, getMonitorCoordinates(0), getMonitorCoordinates(1), (0,0,100,50), (400,300, 200,200)]
 
 	for i in range(len(save_names)):
-		saveScreenToBmp( save_names[i] + '.bmp', monitor_params[i], bbox_params[i] )
-		im = getScreenAsImage( monitor_params[i], bbox_params[i] )
-		im.save( save_names[i] + '.png', format='png' )
+		saveScreenToBmp( save_names[i] + '.bmp', params[i])
+		im = getScreenAsImage(params[i])
+		im.save(save_names[i] + '.png', format='png' )
+
+	print getMonitorCoordinates(0)
+	print getMonitorCoordinates(1)
 
 
 if __name__ == '__main__':
