@@ -60,7 +60,7 @@ def _deleteDCAndBitMap(dc, bitmap):
 	dc.DeleteDC()
 	win32gui.DeleteObject(bitmap.GetHandle())
 
-def getMonitorCoordinates(target_monitor):
+def getMonitorCoordinates(targetMonitor):
 	'''
 	Enumerates the available monitor. Return the 
 	Screen Dimensions of the selected monitor. 
@@ -72,12 +72,12 @@ def getMonitorCoordinates(target_monitor):
 	try:
 		monitors = win32api.EnumDisplayMonitors(None, None)
 
-		if target_monitor > len(monitors)-1:
+		if targetMonitor > len(monitors)-1:
 			raise MonitorSelectionOutOfBounds("Monitor argument exceeds attached number of devices.\n"
 				"There are only %d display devices attached.\n" % len(monitors) + 
 				"Please select appropriate device ( 0=Primary, 1=Secondary, etc..)." )
 
-		left,top,right,bottom = monitors[target_monitor][SCREENRECT]
+		left,top,right,bottom = monitors[targetMonitor][SCREENRECT]
 		width = right - left
 		height = bottom
 
@@ -173,7 +173,7 @@ def getBGR32(dc, bitmap):
 	bufferLen = height * ((width * 3 + 3) & -4)
 	pbBits = ctypes.create_string_buffer(bufferLen)
 
-	ret = ctypes.windll.gdi32.GetDIBits(
+	ret = ctypes.windll.gdi32.GetDIBgetits(
 		dc.GetHandleAttrib(),
 		bitmap.GetHandle(),
 		0,
@@ -242,13 +242,13 @@ def saveScreenToBmp(bmpFilename, bbox=None):
 
 
 def _demo():
-	save_names = ['all_monitors', 'primary_monitor', 'secondary_monitor', 'bounding_test_1', 'bounding_test_2']
+	saveNames = ['all_monitors', 'primary_monitor', 'secondary_monitor', 'bounding_test_1', 'bounding_test_2']
 	params = [None, getMonitorCoordinates(0), getMonitorCoordinates(1), (0,0,100,50), (400,300, 200,200)]
 
-	for i in range(len(save_names)):
-		saveScreenToBmp( save_names[i] + '.bmp', params[i])
+	for i in range(len(saveNames)):
+		saveScreenToBmp( saveNames[i] + '.bmp', params[i])
 		im = getScreenAsImage(params[i])
-		im.save(save_names[i] + '.png', format='png' )
+		im.save(saveNames[i] + '.png', format='png' )
 
 	print getMonitorCoordinates(0)
 	print getMonitorCoordinates(1)
