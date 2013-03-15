@@ -100,19 +100,15 @@ def getDCAndBitMap(saveBmpFilename=None, bbox=None):
 	win32gui.DeleteObject(aPyCBitmap.GetHandle()).  On the returned DC,
 	you *must* call aDC.DeleteDC()
 	"""
+	hwnd = win32gui.GetDesktopWindow()
 	if bbox:
-		hwnd = win32gui.GetDesktopWindow()
-
 		left, top, width, height = bbox
 		if (left < win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN) or 
 			top < win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN) or 
 			width > win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN) or
 			height > win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)):
 			raise Exception('Invalid bounding box. Range exceeds available screen area.')	
-
 	else:
-		hwnd = win32gui.GetDesktopWindow()
-
 		# Get complete virtual screen, including all monitors.
 		left = win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN)
 		top = win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN)
@@ -245,13 +241,16 @@ def _demo():
 	saveNames = ['allMonitors', 'primaryMonitor', 'secondaryMonitor', 'boundingTestOne', 'boundingTestTwo']
 	params = [None, getMonitorCoordinates(0), getMonitorCoordinates(1), (0,0,100,50), (400,300, 200,200)]
 
-	for i in range(len(saveNames)):
-		saveScreenToBmp( saveNames[i] + '.bmp', params[i])
-		im = getScreenAsImage(params[i])
-		im.save(saveNames[i] + '.png', format='png' )
+	# for i in range(len(saveNames)):
+	# 	saveScreenToBmp( saveNames[i] + '.bmp', params[i])
+	# 	im = getScreenAsImage(params[i])
+	# 	im.save(saveNames[i] + '.png', format='png' )
 
-	print getMonitorCoordinates(0)
-	print getMonitorCoordinates(1)
+	while True:
+		getMonitorCoordinates(0)
+		getMonitorCoordinates(1)
+		im = getScreenAsImage()
+		im = getScreenAsImage(getMonitorCoordinates(1))
 
 
 if __name__ == '__main__':
