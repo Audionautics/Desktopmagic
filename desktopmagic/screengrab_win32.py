@@ -242,7 +242,7 @@ def saveScreenToBmp(bmpFilename, bbox=None):
 
 
 def _demo():
-	saveNames = ['all_monitors', 'primary_monitor', 'secondary_monitor', 'bounding_test_1', 'bounding_test_2']
+	saveNames = ['allMonitors', 'primaryMonitor', 'secondaryMonitor', 'boundingTestOne', 'boundingTestTwo']
 	params = [None, getMonitorCoordinates(0), getMonitorCoordinates(1), (0,0,100,50), (400,300, 200,200)]
 
 	for i in range(len(saveNames)):
