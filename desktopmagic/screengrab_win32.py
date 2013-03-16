@@ -10,7 +10,7 @@ import win32gui
 import win32ui
 import win32con
 import win32api
-
+import os, sys
 
 class BITMAPINFOHEADER(ctypes.Structure):
 	_fields_ = [
@@ -40,11 +40,6 @@ class GrabFailed(Exception):
 	Could not take a screenshot.
 	"""
 
-class MonitorSelectionOutOfBounds(Exception):
-	'''
-	Argument out of bounds
-	'''
-
 class BoundingBoxOutOfRange(Exception):
 	'''
 	Coordinates are too large for the current resolution
@@ -60,38 +55,21 @@ def _deleteDCAndBitMap(dc, bitmap):
 	dc.DeleteDC()
 	win32gui.DeleteObject(bitmap.GetHandle())
 
-def getMonitorCoordinates(targetMonitor):
+def getMonitorInfo():
 	'''
 	Enumerates the available monitor. Return the 
 	Screen Dimensions of the selected monitor. 
 	'''
-	HMONITOR = 0
-	HDCMONITOR = 1
-	SCREENRECT = 2
+	H_MONITOR = 0
+	HDC_MONITOR = 1
+	SCREEN_RECT = 2
 
 	try:
 		monitors = win32api.EnumDisplayMonitors(None, None)
-
-		if targetMonitor > len(monitors)-1:
-			raise MonitorSelectionOutOfBounds("Monitor argument exceeds attached number of devices.\n"
-				"There are only %d display devices attached.\n" % len(monitors) + 
-				"Please select appropriate device ( 0=Primary, 1=Secondary, etc..)." )
-
-		left,top,right,bottom = monitors[targetMonitor][SCREENRECT]
-		width = right - left
-		height = bottom
-
 	finally:
-		# I can't figure out what to do with the handle to the Monitor 
-		# that gets returned from EnumDisplayMonitors (the first object in
-		# the tuple). Trying to close it throws an error.. Does it not need 
-		# cleaned up at all? Most of the winApi is back magic to me... 
-		
-		# These device context handles were the only things that I could Close()
-		monitors[0][HDCMONITOR].Close()
-		monitors[1][HDCMONITOR].Close()
+		[monitors[i][HDC_MONITOR].Close() for i in range(len(monitors))]
 
-	return (left, top, width, height)
+	return [monitorAttribs[SCREEN_RECT] for monitorAttribs in monitors]
 
 
 def getDCAndBitMap(saveBmpFilename=None, bbox=None):
@@ -107,7 +85,8 @@ def getDCAndBitMap(saveBmpFilename=None, bbox=None):
 			top < win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN) or 
 			width > win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN) or
 			height > win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)):
-			raise Exception('Invalid bounding box. Range exceeds available screen area.')	
+			raise Exception('Invalid bounding box. Range exceeds \
+						available screen area.')	
 	else:
 		# Get complete virtual screen, including all monitors.
 		left = win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN)
@@ -236,21 +215,40 @@ def saveScreenToBmp(bmpFilename, bbox=None):
 	dc, bitmap = getDCAndBitMap(saveBmpFilename=bmpFilename, bbox=bbox)
 	_deleteDCAndBitMap(dc, bitmap)
 
+def buildAndSetDemoDir():
+	'''
+	_demo now generates a lot of files. 
+	This generates a dir to store the images. 
+	'''
+	try:
+		os.mkdir('demo')
+		os.path.join(os.getcwd(), 'demo')
+	except OSError:
+		pass #already exists
+	return 'demo'
+
 
 def _demo():
-	saveNames = ['allMonitors', 'primaryMonitor', 'secondaryMonitor', 'boundingTestOne', 'boundingTestTwo']
-	params = [None, getMonitorCoordinates(0), getMonitorCoordinates(1), (0,0,100,50), (400,300, 200,200)]
+	dirPath = buildAndSetDemoDir()
 
-	# for i in range(len(saveNames)):
-	# 	saveScreenToBmp( saveNames[i] + '.bmp', params[i])
-	# 	im = getScreenAsImage(params[i])
-	# 	im.save(saveNames[i] + '.png', format='png' )
+	monitors = getMonitorInfo()
+	saveNames = ['allMonitors','boundingTestOne', 'boundingTestTwo']
+	params = [None, (0,0,100,50), (400,300, 200,200)]
+	
+	for i in range(len(monitors)):
+		saveNames.append('Monitor' + str(i + 1))
+		params.append(monitors[i])
+
+	for i in range(len(saveNames)):
+		savePath = os.path.join(dirPath, saveNames[i]) 
+		
+		saveScreenToBmp(savePath + '.bmp', params[i])
+		
+		im = getScreenAsImage(params[i])
+		im.save(savePath + '.png', format='png' )
 
 	while True:
-		getMonitorCoordinates(0)
-		getMonitorCoordinates(1)
-		im = getScreenAsImage()
-		im = getScreenAsImage(getMonitorCoordinates(1))
+		getMonitorInfo()
 
 
 if __name__ == '__main__':
