@@ -45,7 +45,6 @@ class BoundingBoxOutOfRange(Exception):
 	Coordinates are too large for the current resolution
 	'''
 
-
 class DIBFailed(Exception):
 	pass
 
@@ -90,11 +89,12 @@ def getDCAndBitMap(saveBmpFilename=None, bbox=None):
 
 	if bbox:
 		left,  top, width, height = bbox
-		
+
 		if (left < left or top < top or 
 			width > width or height > height):
-			raise Exception("Invalid bounding box. Range exceeds" 
-						"available screen area.")	
+			raise BoundingBoxOutOfRange(
+					"Invalid bounding box. Range exceeds" 
+					"available screen area.")	
 
 	# Retrieve the device context (DC) for the entire window.
 	hwndDevice = win32gui.GetWindowDC(hwnd)
