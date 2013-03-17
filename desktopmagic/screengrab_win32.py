@@ -10,7 +10,7 @@ import win32gui
 import win32ui
 import win32con
 import win32api
-import os, sys
+import os
 
 class BITMAPINFOHEADER(ctypes.Structure):
 	_fields_ = [
@@ -67,7 +67,8 @@ def getMonitorInfo():
 	try:
 		monitors = win32api.EnumDisplayMonitors(None, None)
 	finally:
-		[monitors[i][HDC_MONITOR].Close() for i in range(len(monitors))]
+		for i in range(len(monitors)):
+			monitors[i][HDC_MONITOR].Close()
 
 	return [monitorAttribs[SCREEN_RECT] for monitorAttribs in monitors]
 
@@ -79,24 +80,23 @@ def getDCAndBitMap(saveBmpFilename=None, bbox=None):
 	you *must* call aDC.DeleteDC()
 	"""
 	hwnd = win32gui.GetDesktopWindow()
-	if bbox:
-		left, top, width, height = bbox
-		if (left < win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN) or 
-			top < win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN) or 
-			width > win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN) or
-			height > win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)):
-			raise Exception('Invalid bounding box. Range exceeds \
-						available screen area.')	
-	else:
-		# Get complete virtual screen, including all monitors.
-		left = win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN)
-		top = win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN)
-		width = win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN)
-		height = win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)
-		##print "L", left, "T", top, "dim:", width, "x", height
-
-		# Retrieve the device context (DC) for the entire window.
 	
+	# Get complete virtual screen, including all monitors.
+	left = win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN)
+	top = win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN)
+	width = win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN)
+	height = win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)
+	##print "L", left, "T", top, "dim:", width, "x", height
+
+	if bbox:
+		left,  top, width, height = bbox
+		
+		if (left < left or top < top or 
+			width > width or height > height):
+			raise Exception("Invalid bounding box. Range exceeds" 
+						"available screen area.")	
+
+	# Retrieve the device context (DC) for the entire window.
 	hwndDevice = win32gui.GetWindowDC(hwnd)
 	##print "device", hwndDevice
 	assert isinstance(hwndDevice, (int, long)), hwndDevice
@@ -179,7 +179,7 @@ def getScreenAsImage(bbox=None):
 		# bmpInfo is something like {
 		# 	'bmType': 0, 'bmWidthBytes': 5120, 'bmHeight': 1024,
 		# 	'bmBitsPixel': 32, 'bmPlanes': 1, 'bmWidth': 1280}
-		##print bmpInfo
+		## print bmpInfo
 		size = (bmpInfo['bmWidth'], bmpInfo['bmHeight'])
 
 		if bmpInfo['bmBitsPixel'] == 32:
@@ -215,10 +215,10 @@ def saveScreenToBmp(bmpFilename, bbox=None):
 	dc, bitmap = getDCAndBitMap(saveBmpFilename=bmpFilename, bbox=bbox)
 	_deleteDCAndBitMap(dc, bitmap)
 
-def buildAndSetDemoDir():
+def _buildAndSetDemoDir():
 	'''
 	_demo now generates a lot of files. 
-	This generates a dir to store the images. 
+	This keeps everything organized. 
 	'''
 	try:
 		os.mkdir('demo')
@@ -229,7 +229,7 @@ def buildAndSetDemoDir():
 
 
 def _demo():
-	dirPath = buildAndSetDemoDir()
+	dirPath = _buildAndSetDemoDir()
 
 	monitors = getMonitorInfo()
 	saveNames = ['allMonitors','boundingTestOne', 'boundingTestTwo']
@@ -243,12 +243,8 @@ def _demo():
 		savePath = os.path.join(dirPath, saveNames[i]) 
 		
 		saveScreenToBmp(savePath + '.bmp', params[i])
-		
 		im = getScreenAsImage(params[i])
 		im.save(savePath + '.png', format='png' )
-
-	while True:
-		getMonitorInfo()
 
 
 if __name__ == '__main__':
